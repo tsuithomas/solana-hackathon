@@ -1,0 +1,40 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  background-color: #0b0f17;
+  color: #f8fafc;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  background-image: radial-gradient(
+      circle at 15% 0%,
+      rgba(20, 241, 149, 0.08),
+      transparent 36%
+    ),
+    radial-gradient(
+      circle at 85% 5%,
+      rgba(153, 69, 255, 0.11),
+      transparent 40%
+    );
+  min-height: 100vh;
+}
+
+/* Institutional styling override for @solana/wallet-adapter-react-ui button */
+.sentinel-wallet-btn .wallet-adapter-button {
+  background: linear-gradient(135deg, #9945ff 0%, #6d28d9 100%) !important;
+  border: 1px solid rgba(153, 69, 255, 0.55) !important;
+  border-radius: 0.5rem !important;
+  height: 34px !important;
+  padding: 0 14px !important;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  line-height: 34px !important;
+}
+
+.sentinel-wallet-btn .wallet-adapter-button:hover {
+  filter: brightness(1.1);
+}
