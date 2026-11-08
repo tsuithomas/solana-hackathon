@@ -163,18 +163,3 @@ solana config set --url devnet
 anchor deploy --provider.cluster devnet
 solana program show D6Fr8JAfScQSQXdjGYvH3R9eSt9ZStavCciw8oRqE3v3 --url devnet
 ```
-
----
-
-## 6. 2-Minute Demo Video Script (For MLH Submission)
-
-- **`0:00 – 0:20` | The Hook & Problem:**
-  *"Every week, millions in crypto are lost to blind-signed `SetAuthority` wallet drainers, while autonomous AI DeFi agents still have zero on-chain guardrails. Meet **Solana Sentinel**: an AI-Powered DeFi Risk Firewall, Natural-Language Execution Engine, and On-Chain Audit Vault deployed on Solana Devnet at `D6Fr8JAfScQSQXdjGYvH3R9eSt9ZStavCciw8oRqE3v3`."*
-- **`0:20 – 0:50` | Why Solana + Live Telemetry & Scenario A (Safe AI Execution):**
-  *"Look at our top institutional bar: we're connected live to Solana Devnet tracking real-time TPS, block height, and our deterministic `GuardPolicy` PDA (`Execution Mode: Anchor CPI Vault`). Let's click **Scenario A (Safe AI Payment)**. Sentinel parses our natural-language command, runs a live `simulateTransaction` call against our deployed Anchor program on Devnet, verifies zero hidden token approvals, scores the risk at **8/100**, and unlocks signing. One click executes `execute_guarded_transfer`, increments our on-chain PDA audit counter, and emits an `AuditLogged` event in 400 milliseconds for a fraction of a cent—here is the live transaction on **Solana Explorer Devnet**!"*
-- **`0:50 – 1:25` | Scenario B (Stopping a Wallet Drainer Cold):**
-  *"Now watch what happens when a malicious dApp sneaks an unlimited SPL `Approve` and `SetAuthority(AccountOwner)` takeover inside a claim transaction. We click **Scenario B**. Sentinel inspects the compiled instruction discriminators, detects both the ownership hijack and our `0.50 SOL` GuardPolicy cap violation, spikes the gauge to **96/100 CRITICAL**, and hard-locks execution—enforced on-chain by `SentinelError::RiskScoreTooHigh` in `programs/sentinel_vault/src/lib.rs`."*
-- **`1:25 – 1:50` | Scenario C (Instant Solana Pay Settlement):**
-  *"Need instant bounty settlement? Click **Scenario C**. Sentinel generates a canonical **Solana Pay** QR request with an ephemeral Ed25519 reference key and polls Devnet every 2.5 seconds. Settling from mobile or right inside our browser flips the invoice to **SETTLED ON DEVNET** automatically and appends the Explorer link to our On-Chain Audit Trail."*
-- **`1:50 – 2:00` | Closing:**
-  *"Sub-second AI pre-flight security, live Devnet Anchor PDA guardrails, and sub-cent on-chain auditability—only possible on Solana. Thank you!"*
