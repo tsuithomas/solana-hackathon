@@ -7,7 +7,7 @@ export const SOLANA_CLUSTER = "devnet" as const;
 
 export const SENTINEL_PROGRAM_ID_STR =
   process.env.NEXT_PUBLIC_SENTINEL_PROGRAM_ID ||
-  "FJCh3bosN1DbKe4mpxCMvgosqhx7niPY7ZDajGk1D9ib";
+  "D6Fr8JAfScQSQXdjGYvH3R9eSt9ZStavCciw8oRqE3v3";
 
 export const SENTINEL_PROGRAM_ID = new PublicKey(SENTINEL_PROGRAM_ID_STR);
 

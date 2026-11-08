@@ -1,7 +1,7 @@
 use anchor_lang::prelude::*;
 use anchor_lang::system_program::{self, Transfer};
 
-declare_id!("FJCh3bosN1DbKe4mpxCMvgosqhx7niPY7ZDajGk1D9ib");
+declare_id!("D6Fr8JAfScQSQXdjGYvH3R9eSt9ZStavCciw8oRqE3v3");
 
 /// Seed prefix for deriving deterministic per-wallet GuardPolicy PDAs.
 pub const POLICY_SEED: &[u8] = b"policy";

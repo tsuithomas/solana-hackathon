@@ -6,10 +6,10 @@ resolution = true
 skip-lint = false
 
 [programs.devnet]
-sentinel_vault = "FJCh3bosN1DbKe4mpxCMvgosqhx7niPY7ZDajGk1D9ib"
+sentinel_vault = "D6Fr8JAfScQSQXdjGYvH3R9eSt9ZStavCciw8oRqE3v3"
 
 [programs.localnet]
-sentinel_vault = "FJCh3bosN1DbKe4mpxCMvgosqhx7niPY7ZDajGk1D9ib"
+sentinel_vault = "D6Fr8JAfScQSQXdjGYvH3R9eSt9ZStavCciw8oRqE3v3"
 
 [registry]
 url = "https://api.apr.dev"

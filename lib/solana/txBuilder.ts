@@ -22,6 +22,7 @@ import {
 import {
   buildExecuteGuardedTransferInstruction,
   buildInitializePolicyInstruction,
+  buildUpdatePolicyInstruction,
   deriveGuardPolicyPda,
 } from "./anchorClient";
 
@@ -50,11 +51,10 @@ export function buildSentinelAuditMemoInstruction(params: {
  * Builds a complete, ready-to-sign Devnet Guarded Transfer `VersionedTransaction`.
  *
  * Dual-Mode Architecture:
- * - If `sentinel_vault` Anchor program is deployed on Devnet, dispatches `execute_guarded_transfer`
- *   (initializing `GuardPolicy` PDA in the same atomic transaction if not yet initialized) + SPL Memo audit log.
- * - Otherwise, seamlessly uses the Zero-Dependency Devnet Vault Fallback (`SystemProgram.transfer`
- *   + authenticated `SPL Memo v2` encoding AI Risk Score, GuardPolicy PDA, and SHA-256 Intent Hash)
- *   so judges can sign real Devnet transactions immediately out-of-the-box before running `anchor deploy`.
+ * - When `sentinel_vault` (`D6Fr8JAfScQSQXdjGYvH3R9eSt9ZStavCciw8oRqE3v3`) is executable on Devnet,
+ *   dispatches `execute_guarded_transfer` (auto-initializing or syncing `GuardPolicy` PDA in the
+ *   same atomic transaction if needed) + SPL Memo v2 audit log.
+ * - Falls back gracefully to `SystemProgram.transfer` + `SPL Memo v2` if the RPC cannot read the program.
  */
 export async function buildGuardedTransferTransaction(params: {
   connection: Connection;
@@ -75,6 +75,7 @@ export async function buildGuardedTransferTransaction(params: {
 }> {
   const amountLamports = Math.round(params.amountSol * LAMPORTS_PER_SOL);
   const maxTxLamports = Math.round(params.policyMaxTxSol * LAMPORTS_PER_SOL);
+  const requireAiAudit = params.requireAiAudit ?? true;
 
   if (params.aiRiskScore > MAX_ALLOWED_AI_RISK_SCORE) {
     throw new Error(
@@ -89,7 +90,7 @@ export async function buildGuardedTransferTransaction(params: {
 
   const [policyPda] = deriveGuardPolicyPda(params.authority);
   const instructions: TransactionInstruction[] = [
-    ComputeBudgetProgram.setComputeUnitLimit({ units: 120_000 }),
+    ComputeBudgetProgram.setComputeUnitLimit({ units: 180_000 }),
   ];
 
   let useAnchorCpi = false;
@@ -112,9 +113,28 @@ export async function buildGuardedTransferTransaction(params: {
         buildInitializePolicyInstruction({
           authority: params.authority,
           maxTxLamports,
-          requireAiAudit: params.requireAiAudit ?? true,
+          requireAiAudit,
         })
       );
+    } else if (policyInfo.data.length >= 50) {
+      const buf = new Uint8Array(policyInfo.data);
+      const view = new DataView(buf.buffer, buf.byteOffset, buf.byteLength);
+      const onChainMaxLamports = Number(view.getBigUint64(41, true));
+      const onChainRequireAudit = buf[49] === 1;
+
+      if (
+        onChainMaxLamports !== maxTxLamports ||
+        onChainRequireAudit !== requireAiAudit
+      ) {
+        instructions.push(
+          buildUpdatePolicyInstruction({
+            authority: params.authority,
+            maxTxLamports,
+            requireAiAudit,
+            whitelistedPrograms: [SystemProgram.programId, SPL_MEMO_PROGRAM_ID],
+          })
+        );
+      }
     }
 
     const transferIx = buildExecuteGuardedTransferInstruction({
@@ -139,7 +159,6 @@ export async function buildGuardedTransferTransaction(params: {
       lamports: amountLamports,
     });
 
-    // Attach Solana Pay reference key to the transfer instruction when settling an invoice
     if (params.referencePubkey) {
       transferIx.keys.push({
         pubkey: params.referencePubkey,
@@ -177,10 +196,7 @@ export async function buildGuardedTransferTransaction(params: {
 
 /**
  * Constructs an authentic, multi-instruction malicious wallet-drainer transaction payload
- * for Scenario B security auditing (NEVER signed; strictly inspected & simulated pre-flight):
- * 1. Unlimited SPL Token `Approve` delegation (`u64::MAX`) to known drainer pubkey
- * 2. SPL Token `SetAuthority(AuthorityType.AccountOwner)` hijacking token account ownership
- * 3. Native SOL sweep (`2.50 SOL`) exceeding the user's `GuardPolicy` spending cap
+ * for Scenario B security auditing (NEVER signed; strictly inspected & simulated pre-flight).
  */
 export async function buildMockMaliciousDrainerTransaction(params: {
   connection: Connection;
@@ -188,7 +204,6 @@ export async function buildMockMaliciousDrainerTransaction(params: {
 }): Promise<VersionedTransaction> {
   const drainerPubkey = new PublicKey(MOCK_MALICIOUS_DRAINER);
 
-  // Deterministic mock token account derived from victim for realistic SPL Token drainer inspection
   const [mockVictimTokenAccount] = PublicKey.findProgramAddressSync(
     [Buffer.from("mock_ata"), params.victimAuthority.toBuffer()],
     SENTINEL_PROGRAM_ID
@@ -232,8 +247,8 @@ export async function buildMockMaliciousDrainerTransaction(params: {
 }
 
 /**
- * Builds an on-chain Policy Sync transaction recording updated GuardPolicy parameters
- * in an authenticated SPL Memo v2 commitment (or Anchor `update_policy` if deployed).
+ * Builds an on-chain Policy Sync transaction dispatching Anchor `initialize_policy` or
+ * `update_policy` on `sentinel_vault` when deployed on Devnet, plus an authenticated SPL Memo v2 commitment.
  */
 export async function buildPolicySyncTransaction(params: {
   connection: Connection;
@@ -247,19 +262,53 @@ export async function buildPolicySyncTransaction(params: {
 }> {
   const [policyPda] = deriveGuardPolicyPda(params.authority);
   const maxTxLamports = Math.round(params.maxTxSol * LAMPORTS_PER_SOL);
-  const memoPayload = `SENTINEL_POLICY_SYNC_V1|pda=${policyPda.toBase58().slice(0, 12)}|max_lamports=${maxTxLamports}|audit=${params.requireAiAudit ? 1 : 0}|hash=${params.intentHashHex.slice(0, 24)}`;
+  const instructions: TransactionInstruction[] = [
+    ComputeBudgetProgram.setComputeUnitLimit({ units: 120_000 }),
+  ];
 
-  const ix = new TransactionInstruction({
-    programId: SPL_MEMO_PROGRAM_ID,
-    keys: [{ pubkey: params.authority, isSigner: true, isWritable: false }],
-    data: Buffer.from(memoPayload, "utf8"),
-  });
+  try {
+    const [programInfo, policyInfo] = await Promise.all([
+      params.connection.getAccountInfo(SENTINEL_PROGRAM_ID),
+      params.connection.getAccountInfo(policyPda),
+    ]);
+    if (programInfo?.executable) {
+      if (!policyInfo) {
+        instructions.push(
+          buildInitializePolicyInstruction({
+            authority: params.authority,
+            maxTxLamports,
+            requireAiAudit: params.requireAiAudit,
+          })
+        );
+      } else {
+        instructions.push(
+          buildUpdatePolicyInstruction({
+            authority: params.authority,
+            maxTxLamports,
+            requireAiAudit: params.requireAiAudit,
+            whitelistedPrograms: [SystemProgram.programId, SPL_MEMO_PROGRAM_ID],
+          })
+        );
+      }
+    }
+  } catch {
+    // Proceed with SPL Memo commitment if RPC account lookup fails
+  }
+
+  const memoPayload = `SENTINEL_POLICY_SYNC_V1|pda=${policyPda.toBase58().slice(0, 12)}|max_lamports=${maxTxLamports}|audit=${params.requireAiAudit ? 1 : 0}|hash=${params.intentHashHex.slice(0, 24)}`;
+  instructions.push(
+    new TransactionInstruction({
+      programId: SPL_MEMO_PROGRAM_ID,
+      keys: [{ pubkey: params.authority, isSigner: true, isWritable: false }],
+      data: Buffer.from(memoPayload, "utf8"),
+    })
+  );
 
   const { blockhash } = await params.connection.getLatestBlockhash("confirmed");
   const messageV0 = new TransactionMessage({
     payerKey: params.authority,
     recentBlockhash: blockhash,
-    instructions: [ix],
+    instructions,
   }).compileToV0Message();
 
   return {
